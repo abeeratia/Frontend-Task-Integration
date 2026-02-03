@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { EllipsisVertical, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +35,7 @@ import { customers } from "@/data/customers";
 const PAGE_SIZE = 5;
 
 export default function CustomersPage() {
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [listName, setListName] = useState("");
@@ -144,6 +146,7 @@ export default function CustomersPage() {
                   // handle creation
                   setDialogOpen(false);
                   resetDialog();
+                  router.push(`/customers/${customers.length + 1}`);
                 }}
               >
                 Create List
@@ -170,7 +173,11 @@ export default function CustomersPage() {
           </TableHeader>
           <TableBody>
             {paginatedCustomers.map((customer) => (
-              <TableRow key={customer.id}>
+              <TableRow
+                key={customer.id}
+                className="cursor-pointer"
+                onClick={() => router.push(`/customers/${customer.id}`)}
+              >
                 <TableCell>
                   <div className="font-medium">{customer.name}</div>
                 </TableCell>
@@ -183,7 +190,7 @@ export default function CustomersPage() {
                     Modified {customer.modifiedAt}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
