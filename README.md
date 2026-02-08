@@ -145,7 +145,6 @@ Create a new agent. Send the full form data as JSON.
   "model": "pro",
   "latency": 0.5,
   "speed": 110,
-  "firstMessage": "Hello! How can I help you today?",
   "callScript": "...",
   "serviceDescription": "...",
   "attachments": ["attachment-id-1"],

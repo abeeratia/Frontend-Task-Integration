@@ -120,7 +120,6 @@ export interface AgentFormInitialData {
   model?: string;
   latency?: number;
   speed?: number;
-  firstMessage?: string;
   callScript?: string;
   serviceDescription?: string;
 }
@@ -141,9 +140,6 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
   const [latency, setLatency] = useState([initialData?.latency ?? 0.5]);
   const [speed, setSpeed] = useState([initialData?.speed ?? 110]);
   const [description, setDescription] = useState(initialData?.description ?? "");
-
-  // First Message
-  const [firstMessage, setFirstMessage] = useState(initialData?.firstMessage ?? "");
 
   // Call Script
   const [callScript, setCallScript] = useState(initialData?.callScript ?? "");
@@ -377,25 +373,7 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
             </div>
           </CollapsibleSection>
 
-          {/* Section 2: First Message */}
-          <CollapsibleSection
-            title="First Message"
-            description="The first message the agent will say when the call starts."
-          >
-            <div className="space-y-3">
-              <Textarea
-                placeholder="e.g. Hello! Thank you for calling. How can I help you today?"
-                value={firstMessage}
-                onChange={(e) => setFirstMessage(e.target.value)}
-                rows={4}
-              />
-              <Button variant="outline" size="sm">
-                Generate
-              </Button>
-            </div>
-          </CollapsibleSection>
-
-          {/* Section 3: Call Script */}
+          {/* Section 2: Call Script */}
           <CollapsibleSection
             title="Call Script"
             description="What would you like the AI agent to say during the call?"
