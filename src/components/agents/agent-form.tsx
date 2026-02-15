@@ -1,13 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import {
-  ChevronDown,
-  Upload,
-  X,
-  FileText,
-  Phone,
-} from "lucide-react";
+import { useState, useRef } from "react";
+import { ChevronDown, Upload, X, FileText, Phone, Loader2 } from "lucide-react";
+
+// UI Components
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -45,17 +41,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface UploadedFile {
-  name: string;
-  size: number;
-  file: File;
-}
+// Hooks & Libs
+import { useReferenceData } from "@/hooks/use-reference-data";
+import { useFileUpload } from "@/hooks/use-file-upload";
+import { useAgent } from "@/hooks/use-agent";
+import { Agent } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-provider";
+import { useEffect } from "react";
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
+// --- Helper Component ---
 
 function CollapsibleSection({
   title,
@@ -88,9 +82,7 @@ function CollapsibleSection({
               </div>
               <div className="flex items-center gap-2">
                 {badge !== undefined && badge > 0 && (
-                  <Badge variant="destructive">
-                    {badge} required
-                  </Badge>
+                  <Badge variant="destructive">{badge} required</Badge>
                 )}
                 <ChevronDown
                   className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
@@ -110,7 +102,16 @@ function CollapsibleSection({
   );
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+// --- Main Component ---
+
 export interface AgentFormInitialData {
+  id?: string;
   agentName?: string;
   description?: string;
   callType?: string;
@@ -122,6 +123,11 @@ export interface AgentFormInitialData {
   speed?: number;
   callScript?: string;
   serviceDescription?: string;
+  tools?: {
+    allowHangUp: boolean;
+    allowCallback: boolean;
+    liveTransfer: boolean;
+  };
 }
 
 interface AgentFormProps {
@@ -130,8 +136,35 @@ interface AgentFormProps {
 }
 
 export function AgentForm({ mode, initialData }: AgentFormProps) {
-  // Form state — initialized from initialData when provided
+  // 1. Data/API Hooks
+  const {
+    languages,
+    voices,
+    prompts,
+    models,
+    loading: dataLoading,
+  } = useReferenceData();
+  const {
+    uploadedFiles,
+    isDragging,
+    handleFiles,
+    removeFile,
+    dragHandlers,
+    ACCEPTED_TYPES,
+  } = useFileUpload();
+  const { saveAgent, startTestCall, isSaving, isTesting } = useAgent();
+  const { toast } = useToast();
+  const [showValidation, setShowValidation] = useState(false);
+  const [showTestCallValidation, setShowTestCallValidation] = useState(false);
+
+  // 2. Form State
+  const [agentId, setAgentId] = useState<string | null>(
+    initialData?.id || null
+  ); // To store ID after creation
   const [agentName, setAgentName] = useState(initialData?.agentName ?? "");
+  const [description, setDescription] = useState(
+    initialData?.description ?? ""
+  );
   const [callType, setCallType] = useState(initialData?.callType ?? "");
   const [language, setLanguage] = useState(initialData?.language ?? "");
   const [voice, setVoice] = useState(initialData?.voice ?? "");
@@ -139,92 +172,157 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
   const [model, setModel] = useState(initialData?.model ?? "");
   const [latency, setLatency] = useState([initialData?.latency ?? 0.5]);
   const [speed, setSpeed] = useState([initialData?.speed ?? 110]);
-  const [description, setDescription] = useState(initialData?.description ?? "");
 
-  // Call Script
   const [callScript, setCallScript] = useState(initialData?.callScript ?? "");
-
-  // Service/Product Description
-  const [serviceDescription, setServiceDescription] = useState(initialData?.serviceDescription ?? "");
-
-  // Reference Data
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Test Call
-  const [testFirstName, setTestFirstName] = useState("");
-  const [testLastName, setTestLastName] = useState("");
-  const [testGender, setTestGender] = useState("");
-  const [testPhone, setTestPhone] = useState("");
-
-  // Badge counts for required fields
-  const basicSettingsMissing = [agentName, callType, language, voice, prompt, model].filter(
-    (v) => !v
-  ).length;
-
-  // File upload handlers
-  const ACCEPTED_TYPES = [
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".txt",
-    ".csv",
-    ".xlsx",
-    ".xls",
-  ];
-
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files) return;
-      const newFiles: UploadedFile[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const ext = "." + file.name.split(".").pop()?.toLowerCase();
-        if (ACCEPTED_TYPES.includes(ext)) {
-          newFiles.push({ name: file.name, size: file.size, file });
-        }
-      }
-      setUploadedFiles((prev) => [...prev, ...newFiles]);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+  const [serviceDescription, setServiceDescription] = useState(
+    initialData?.serviceDescription ?? ""
   );
 
-  const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
+  // Tool Switches
+  const [allowHangUp, setAllowHangUp] = useState(
+    initialData?.tools?.allowHangUp ?? true
+  );
+  const [allowCallback, setAllowCallback] = useState(
+    initialData?.tools?.allowCallback ?? false
+  );
+  const [liveTransfer, setLiveTransfer] = useState(
+    initialData?.tools?.liveTransfer ?? false
+  );
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+  // Test Call State
+  const [testFirstName, setTestFirstName] = useState("");
+  const [testLastName, setTestLastName] = useState("");
+  const [testGender, setTestGender] = useState("male");
+  const [testPhone, setTestPhone] = useState("");
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFiles(e.dataTransfer.files);
-  };
+  // 3. Computed
+  const basicSettingsMissing = [
+    agentName,
+    callType,
+    language,
+    voice,
+    prompt,
+    model,
+  ].filter((v) => !v).length;
 
   const heading = mode === "create" ? "Create Agent" : "Edit Agent";
-  const saveLabel = mode === "create" ? "Save Agent" : "Save Changes";
+  const saveLabel = isSaving
+    ? "Saving..."
+    : mode === "create"
+    ? "Save Agent"
+    : "Save Changes";
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+         const hasContent = agentName || description || callScript;
+      if (hasContent && !isSaving) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [agentName, description, callScript, isSaving]);
+
+  const handleSave = async (isAutoSave = false) => {
+    // Validate required fields
+    if (!agentName || !callType || !language || !voice || !prompt || !model) {
+      if (!isAutoSave) {
+        setShowValidation(true);
+        toast("Please fill in all required fields in Basic Settings.", "error");
+      }
+      return null;
+    }
+
+    const agentData: Omit<Agent, "id"> = {
+      name: agentName,
+      description,
+      callType,
+      language,
+      voice,
+      prompt,
+      model,
+      latency: latency[0],
+      speed: speed[0],
+      callScript,
+      serviceDescription,
+      attachments: uploadedFiles
+        .filter((f) => f.status === "completed" && f.attachmentId)
+        .map((f) => f.attachmentId!),
+      tools: {
+        allowHangUp,
+        allowCallback,
+        liveTransfer,
+      },
+    };
+
+    try {
+      const savedAgent = await saveAgent(agentId, agentData);
+      setAgentId(savedAgent.id || null); // Ensure we capture the ID
+
+      if (!isAutoSave) {
+        toast("Agent saved successfully!", "success");
+      }
+      return savedAgent.id;
+    } catch (error: any) {
+      console.error("Save failed", error);
+      if (!isAutoSave) {
+        const message = error.message || "Failed to save agent.";
+        toast(message, "error");
+      }
+      return null;
+    }
+  };
+
+  const handleTestCall = async () => {
+    if (!testPhone) {
+      setShowTestCallValidation(true);
+      toast("Please enter a phone number for the test call.", "warning");
+      return;
+    }
+
+    const savedId = await handleSave(true);
+    if (!savedId) return; // Save failed or validation error
+
+    try {
+      const res = await startTestCall(savedId, {
+        firstName: testFirstName,
+        lastName: testLastName,
+        gender: testGender,
+        phoneNumber: testPhone,
+      });
+      if (res.status === "initiated") {
+        toast("Test call initiated successfully", "success");
+      }
+    } catch (error) {
+      console.error("Test call error", error);
+      toast("Failed to initiate test call.", "error");
+    }
+  };
+
+  if (dataLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-muted-foreground">Loading resources...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{heading}</h1>
-        <Button>{saveLabel}</Button>
+        <Button onClick={() => handleSave(false)} disabled={isSaving}>
+          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {saveLabel}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column — Collapsible Sections */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          {/* Section 1: Basic Settings */}
           <CollapsibleSection
             title="Basic Settings"
             description="Add some information about your agent to get started."
@@ -241,7 +339,15 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   placeholder="e.g. Sales Assistant"
                   value={agentName}
                   onChange={(e) => setAgentName(e.target.value)}
+                  className={
+                    showValidation && !agentName ? "border-destructive" : ""
+                  }
                 />
+                {showValidation && !agentName && (
+                  <p className="text-xs text-destructive">
+                    Agent Name is required
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -259,14 +365,27 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   Call Type <span className="text-destructive">*</span>
                 </Label>
                 <Select value={callType} onValueChange={setCallType}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger
+                    className={`w-full ${
+                      showValidation && !callType ? "border-destructive" : ""
+                    }`}
+                  >
                     <SelectValue placeholder="Select call type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="inbound">Inbound (Receive Calls)</SelectItem>
-                    <SelectItem value="outbound">Outbound (Make Calls)</SelectItem>
+                    <SelectItem value="inbound">
+                      Inbound (Receive Calls)
+                    </SelectItem>
+                    <SelectItem value="outbound">
+                      Outbound (Make Calls)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
+                {showValidation && !callType && (
+                  <p className="text-xs text-destructive">
+                    Call Type is required
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -274,16 +393,26 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   Language <span className="text-destructive">*</span>
                 </Label>
                 <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger
+                    className={`w-full ${
+                      showValidation && !language ? "border-destructive" : ""
+                    }`}
+                  >
                     <SelectValue placeholder="Select language" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="ar">Arabic</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
+                    {languages.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {showValidation && !language && (
+                  <p className="text-xs text-destructive">
+                    Language is required
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -291,18 +420,34 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   Voice <span className="text-destructive">*</span>
                 </Label>
                 <Select value={voice} onValueChange={setVoice}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger
+                    className={`w-full ${
+                      showValidation && !voice ? "border-destructive" : ""
+                    }`}
+                  >
                     <SelectValue placeholder="Select voice" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="alloy">Alloy</SelectItem>
-                    <SelectItem value="echo">Echo</SelectItem>
-                    <SelectItem value="fable">Fable</SelectItem>
-                    <SelectItem value="onyx">Onyx</SelectItem>
-                    <SelectItem value="nova">Nova</SelectItem>
-                    <SelectItem value="shimmer">Shimmer</SelectItem>
+                    {voices
+                      .filter((v) => !language || v.language === language)
+                      .map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span>{v.name}</span>
+                            <Badge
+                              variant="secondary"
+                              className="text-xs h-5 px-1.5 font-normal"
+                            >
+                              {v.tag}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
+                {showValidation && !voice && (
+                  <p className="text-xs text-destructive">Voice is required</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -310,16 +455,24 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   Prompt <span className="text-destructive">*</span>
                 </Label>
                 <Select value={prompt} onValueChange={setPrompt}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger
+                    className={`w-full ${
+                      showValidation && !prompt ? "border-destructive" : ""
+                    }`}
+                  >
                     <SelectValue placeholder="Select prompt" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">Default Prompt</SelectItem>
-                    <SelectItem value="sales">Sales Prompt</SelectItem>
-                    <SelectItem value="support">Support Prompt</SelectItem>
-                    <SelectItem value="custom">Custom Prompt</SelectItem>
+                    {prompts.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {showValidation && !prompt && (
+                  <p className="text-xs text-destructive">Prompt is required</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -327,15 +480,24 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   Model <span className="text-destructive">*</span>
                 </Label>
                 <Select value={model} onValueChange={setModel}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger
+                    className={`w-full ${
+                      showValidation && !model ? "border-destructive" : ""
+                    }`}
+                  >
                     <SelectValue placeholder="Select model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pro">Pro</SelectItem>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="flex">Flex</SelectItem>
+                    {models.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {showValidation && !model && (
+                  <p className="text-xs text-destructive">Model is required</p>
+                )}
               </div>
 
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -369,14 +531,13 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   </div>
                 </div>
               </div>
-
             </div>
           </CollapsibleSection>
 
           {/* Section 2: Call Script */}
           <CollapsibleSection
             title="Call Script"
-            description="What would you like the AI agent to say during the call?"
+            description="What should the agent say?"
           >
             <div className="space-y-2">
               <Textarea
@@ -392,10 +553,10 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
             </div>
           </CollapsibleSection>
 
-          {/* Section 4: Service/Product Description */}
+          {/* Section 3: Service Description */}
           <CollapsibleSection
             title="Service/Product Description"
-            description="Add a knowledge base about your service or product."
+            description="Knowledge base about your service."
           >
             <div className="space-y-2">
               <Textarea
@@ -411,22 +572,18 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
             </div>
           </CollapsibleSection>
 
-          {/* Section 5: Reference Data */}
           <CollapsibleSection
             title="Reference Data"
-            description="Enhance your agent's knowledge base with uploaded files."
+            description="Upload files for knowledge base."
           >
             <div className="space-y-4">
-              {/* Drop zone */}
               <div
                 className={`relative rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
                   isDragging
                     ? "border-primary bg-primary/5"
                     : "border-muted-foreground/25"
                 }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                {...dragHandlers}
               >
                 <input
                   ref={fileInputRef}
@@ -452,7 +609,6 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 </p>
               </div>
 
-              {/* File list */}
               {uploadedFiles.length > 0 ? (
                 <div className="space-y-2">
                   {uploadedFiles.map((f, i) => (
@@ -466,6 +622,19 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                         <span className="text-xs text-muted-foreground shrink-0">
                           {formatFileSize(f.size)}
                         </span>
+                        {f.status === "uploading" && (
+                          <span className="text-xs text-blue-500 animate-pulse">
+                            Uploading...
+                          </span>
+                        )}
+                        {f.status === "completed" && (
+                          <span className="text-xs text-green-500 font-medium">
+                            Done
+                          </span>
+                        )}
+                        {f.status === "error" && (
+                          <span className="text-xs text-red-500">Error</span>
+                        )}
                       </div>
                       <Button
                         variant="ghost"
@@ -487,10 +656,10 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
             </div>
           </CollapsibleSection>
 
-          {/* Section 6: Tools */}
+          {/* Section 5: Tools */}
           <CollapsibleSection
             title="Tools"
-            description="Tools that allow the AI agent to perform call-handling actions and manage session control."
+            description="Agent capabilities and controls."
           >
             <FieldGroup className="w-full">
               <FieldLabel htmlFor="switch-hangup">
@@ -498,10 +667,14 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   <FieldContent>
                     <FieldTitle>Allow hang up</FieldTitle>
                     <FieldDescription>
-                      Select if you would like to allow the agent to hang up the call
+                      Allow agent to end the call.
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="switch-hangup" />
+                  <Switch
+                    id="switch-hangup"
+                    checked={allowHangUp}
+                    onCheckedChange={setAllowHangUp}
+                  />
                 </Field>
               </FieldLabel>
               <FieldLabel htmlFor="switch-callback">
@@ -509,10 +682,14 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   <FieldContent>
                     <FieldTitle>Allow callback</FieldTitle>
                     <FieldDescription>
-                      Select if you would like to allow the agent to make callbacks
+                      Allow agent to schedule callbacks.
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="switch-callback" />
+                  <Switch
+                    id="switch-callback"
+                    checked={allowCallback}
+                    onCheckedChange={setAllowCallback}
+                  />
                 </Field>
               </FieldLabel>
               <FieldLabel htmlFor="switch-transfer">
@@ -520,18 +697,21 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   <FieldContent>
                     <FieldTitle>Live transfer</FieldTitle>
                     <FieldDescription>
-                      Select if you want to transfer the call to a human agent
+                      Transfer directly to a human agent.
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="switch-transfer" />
+                  <Switch
+                    id="switch-transfer"
+                    checked={liveTransfer}
+                    onCheckedChange={setLiveTransfer}
+                  />
                 </Field>
               </FieldLabel>
             </FieldGroup>
           </CollapsibleSection>
-
         </div>
 
-        {/* Right Column — Sticky Test Call Card */}
+        {/* Right Column — Test Call */}
         <div className="lg:col-span-1">
           <div className="lg:sticky lg:top-6">
             <Card>
@@ -541,8 +721,7 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                   Test Call
                 </CardTitle>
                 <CardDescription>
-                  Make a test call to preview your agent. Each test call will
-                  deduct credits from your account.
+                  Preview your agent (deducts credits).
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -590,12 +769,30 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                       value={testPhone}
                       onChange={(value) => setTestPhone(value)}
                       placeholder="Enter phone number"
+                      className={
+                        showTestCallValidation && !testPhone
+                          ? "border-destructive rounded-md scale-100"
+                          : ""
+                      }
                     />
+                    {showTestCallValidation && !testPhone && (
+                      <p className="text-xs text-destructive">
+                        Phone number is required
+                      </p>
+                    )}
                   </div>
 
-                  <Button className="w-full">
-                    <Phone className="mr-2 h-4 w-4" />
-                    Start Test Call
+                  <Button
+                    className="w-full"
+                    onClick={handleTestCall}
+                    disabled={isTesting || isSaving}
+                  >
+                    {isTesting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Phone className="mr-2 h-4 w-4" />
+                    )}
+                    {isTesting ? "Connecting..." : "Start Test Call"}
                   </Button>
                 </div>
               </CardContent>
@@ -604,10 +801,12 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
         </div>
       </div>
 
-      {/* Sticky bottom save bar */}
       <div className="sticky bottom-0 -mx-6 -mb-6 border-t bg-background px-6 py-4">
         <div className="flex justify-end">
-          <Button>{saveLabel}</Button>
+          <Button onClick={() => handleSave(false)} disabled={isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {saveLabel}
+          </Button>
         </div>
       </div>
     </div>

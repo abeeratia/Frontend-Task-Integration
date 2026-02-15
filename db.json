@@ -1,35 +1,184 @@
 {
   "languages": [
-    { "id": "en", "name": "English", "code": "en" },
-    { "id": "ar", "name": "Arabic", "code": "ar" },
-    { "id": "fr", "name": "French", "code": "fr" },
-    { "id": "es", "name": "Spanish", "code": "es" },
-    { "id": "de", "name": "German", "code": "de" },
-    { "id": "it", "name": "Italian", "code": "it" },
-    { "id": "pt", "name": "Portuguese", "code": "pt" },
-    { "id": "zh", "name": "Chinese", "code": "zh" },
-    { "id": "ja", "name": "Japanese", "code": "ja" },
-    { "id": "ko", "name": "Korean", "code": "ko" }
+    {
+      "id": "en",
+      "name": "English",
+      "code": "en"
+    },
+    {
+      "id": "ar",
+      "name": "Arabic",
+      "code": "ar"
+    },
+    {
+      "id": "fr",
+      "name": "French",
+      "code": "fr"
+    },
+    {
+      "id": "es",
+      "name": "Spanish",
+      "code": "es"
+    },
+    {
+      "id": "de",
+      "name": "German",
+      "code": "de"
+    },
+    {
+      "id": "it",
+      "name": "Italian",
+      "code": "it"
+    },
+    {
+      "id": "pt",
+      "name": "Portuguese",
+      "code": "pt"
+    },
+    {
+      "id": "zh",
+      "name": "Chinese",
+      "code": "zh"
+    },
+    {
+      "id": "ja",
+      "name": "Japanese",
+      "code": "ja"
+    },
+    {
+      "id": "ko",
+      "name": "Korean",
+      "code": "ko"
+    }
   ],
   "voices": [
-    { "id": "alloy", "name": "Alloy", "tag": "Premium", "language": "en" },
-    { "id": "echo", "name": "Echo", "tag": "Standard", "language": "en" },
-    { "id": "fable", "name": "Fable", "tag": "Premium", "language": "en" },
-    { "id": "onyx", "name": "Onyx", "tag": "Standard", "language": "en" },
-    { "id": "nova", "name": "Nova", "tag": "Premium", "language": "en" },
-    { "id": "shimmer", "name": "Shimmer", "tag": "Standard", "language": "en" }
+    {
+      "id": "alloy",
+      "name": "Alloy",
+      "tag": "Premium",
+      "language": "en"
+    },
+    {
+      "id": "echo",
+      "name": "Echo",
+      "tag": "Standard",
+      "language": "en"
+    },
+    {
+      "id": "fable",
+      "name": "Fable",
+      "tag": "Premium",
+      "language": "en"
+    },
+    {
+      "id": "onyx",
+      "name": "Onyx",
+      "tag": "Standard",
+      "language": "en"
+    },
+    {
+      "id": "nova",
+      "name": "Nova",
+      "tag": "Premium",
+      "language": "en"
+    },
+    {
+      "id": "shimmer",
+      "name": "Shimmer",
+      "tag": "Standard",
+      "language": "en"
+    }
   ],
   "prompts": [
-    { "id": "default", "name": "Default Prompt", "description": "General-purpose prompt" },
-    { "id": "sales", "name": "Sales Prompt", "description": "Optimized for sales" },
-    { "id": "support", "name": "Support Prompt", "description": "Optimized for support" },
-    { "id": "custom", "name": "Custom Prompt", "description": "Build your own" }
+    {
+      "id": "default",
+      "name": "Default Prompt",
+      "description": "General-purpose prompt"
+    },
+    {
+      "id": "sales",
+      "name": "Sales Prompt",
+      "description": "Optimized for sales"
+    },
+    {
+      "id": "support",
+      "name": "Support Prompt",
+      "description": "Optimized for support"
+    },
+    {
+      "id": "custom",
+      "name": "Custom Prompt",
+      "description": "Build your own"
+    }
   ],
   "models": [
-    { "id": "pro", "name": "Pro", "description": "Highest quality, lowest latency" },
-    { "id": "standard", "name": "Standard", "description": "Balanced quality and cost" },
-    { "id": "flex", "name": "Flex", "description": "Cost-effective for high volume" }
+    {
+      "id": "pro",
+      "name": "Pro",
+      "description": "Highest quality, lowest latency"
+    },
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "Balanced quality and cost"
+    },
+    {
+      "id": "flex",
+      "name": "Flex",
+      "description": "Cost-effective for high volume"
+    }
   ],
-  "agents": [],
-  "attachments": []
+  "agents": [
+    {
+      "name": "Sales Assistant",
+      "description": "Handles inbound sales calls, answers product questions, and captures customer information.",
+      "callType": "inbound",
+      "language": "en",
+      "voice": "alloy",
+      "prompt": "sales",
+      "model": "pro",
+      "latency": 0.5,
+      "speed": 111,
+      "callScript": "Hello, thank you for calling. How can I assist you today?\n",
+      "serviceDescription": "We provide AI-powered voice agents for handling customer calls, sales, and support.\n",
+      "attachments": [],
+      "tools": {
+        "allowHangUp": true,
+        "allowCallback": false,
+        "liveTransfer": false
+      },
+      "id": 1
+    },
+    {
+      "name": "abeer",
+      "description": "decript",
+      "callType": "inbound",
+      "language": "en",
+      "voice": "echo",
+      "prompt": "default",
+      "model": "standard",
+      "latency": 0.7,
+      "speed": 102,
+      "callScript": "aaa",
+      "serviceDescription": "aaaa",
+      "attachments": [
+        1
+      ],
+      "tools": {
+        "allowHangUp": true,
+        "allowCallback": false,
+        "liveTransfer": false
+      },
+      "id": 2
+    }
+  ],
+  "attachments": [
+    {
+      "key": "4b258e8a-6f9a-4ec4-b2c2-8079b42d8b18",
+      "fileName": "Abeer Atia _CV FullStack.pdf",
+      "fileSize": 269482,
+      "mimeType": "application/pdf",
+      "id": 1
+    }
+  ]
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const crypto = require("crypto");
 
 module.exports = (req, res, next) => {
@@ -10,7 +11,6 @@ module.exports = (req, res, next) => {
     return res.sendStatus(200);
   }
 
-  // POST /api/attachments/upload-url — returns a signed upload URL
   if (req.method === "POST" && req.url === "/api/attachments/upload-url") {
     const key = crypto.randomUUID();
     return res.status(200).json({
@@ -20,7 +20,6 @@ module.exports = (req, res, next) => {
     });
   }
 
-  // PUT /upload/:key — simulates file upload to signed URL
   if (req.method === "PUT" && req.url.startsWith("/upload/")) {
     const key = req.url.split("/upload/")[1];
     return res.status(200).json({
@@ -30,7 +29,6 @@ module.exports = (req, res, next) => {
     });
   }
 
-  // POST /api/agents/:id/test-call — simulates initiating a test call
   const testCallMatch = req.url.match(/^\/api\/agents\/([^/]+)\/test-call$/);
   if (req.method === "POST" && testCallMatch) {
     const agentId = testCallMatch[1];
